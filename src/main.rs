@@ -10,9 +10,9 @@ struct Person {
 enum Command {
     Add(Person),
     Remove(Person),
-    List,
+    List(String),
+    Error(String),
     Exit,
-    Error,
 }
 
 #[derive(Debug)]
@@ -46,18 +46,60 @@ impl Company {
 
     fn remove(&mut self, person: Person) {
         let Person { name, department } = person;
+
+        // why write like this? We assume no data consistency.
+        // If a department exists and the employee is in it, we remove the employee
+        // But later we don't assume the employee's department list is consistent and would also
+        // contain the department we just removed them from. So we do the check again:
+        // If employee exists and the department is in their list, we remove the department from the list
+
         if let Some(employees) = self.department_employees.get_mut(&department) {
             if let Ok(i) = employees.binary_search(&name) {
                 employees.remove(i);
+            }
+            // Remove department if it has no employees
+            if employees.is_empty() {
+                self.department_employees.remove(&department);
             }
         }
         if let Some(departments) = self.employee_departments.get_mut(&name) {
             if let Ok(i) = departments.binary_search(&department) {
                 departments.remove(i);
             }
+            // Remove employee if they are not in any departments
+            if departments.is_empty() {
+                self.employee_departments.remove(&name);
+            }
         }
-        // TODO: Remove employee if they are not in any departments
-        // TODO: Remove department if it has no employees
+    }
+
+    fn list(&self, which: String) {
+        // TODO: move presentation logic out of company struct and just return the list with some metadata
+        match which.as_str() {
+            "all" => {
+                if self.employees.is_empty() {
+                    println!("No Employees");
+                } else {
+                    println!("All Employees");
+                    println!("-------------");
+                    for employee in &self.employees {
+                        println!("{}", employee);
+                    }
+                    println!("-------------");
+                }
+            }
+            _ => match self.department_employees.get(&which) {
+                None => println!("No Department found"),
+                Some(employees) => {
+                    println!("{} department", which);
+                    println!("-------------");
+                    for employee in employees {
+                        println!("{}", employee);
+                    }
+                    println!("-------------");
+                }
+            },
+        }
     }
 }
 
@@ -76,22 +118,23 @@ fn main() {
             .expect("Failed to read command");
 
         let command: Command = parse_input(command);
-        println!("{:#?}", command);
 
         match command {
             Command::Add(person) => {
                 company.add(person);
-                println!("Company {:#?}", company);
             }
             Command::Remove(person) => {
-                println!("Not implemented");
+                company.remove(person);
+            }
+            Command::List(which) => {
+                company.list(which);
             }
             Command::Exit => {
                 println!("Exiting");
                 break;
             }
-            _ => {
-                println!("Not implemented");
+            Command::Error(message) => {
+                println!("{}", message);
             }
         }
     }
@@ -103,45 +146,62 @@ fn parse_input(input: String) -> Command {
     let command_key = command_key.as_str();
 
     match command_key {
-        "add" => {
-            let remaining_tokens = tokens[1..].to_vec();
-            let end_i = get_name_end(&remaining_tokens, "to");
-            match end_i {
-                0 => return Command::Error,
-                _ => {
-                    let name = remaining_tokens[0..end_i].join(" ");
-                    let dept_start = end_i + 1;
-                    match remaining_tokens.get(dept_start) {
-                        None => Command::Error,
-                        Some(_) => {
-                            let department = remaining_tokens[dept_start..].join(" ");
-                            Command::Add(Person { name, department })
+        "add" => match tokens.get(1) {
+            None => return Command::Error(String::from("No name provided")),
+            Some(_) => {
+                let remaining_tokens = tokens[1..].to_vec();
+                let end_i = get_name_end(&remaining_tokens, "to");
+                match end_i {
+                    0 => return Command::Error(String::from("Usage: ADD <name> TO <department>")),
+                    _ => {
+                        let name = remaining_tokens[0..end_i].join(" ");
+                        let dept_start = end_i + 1;
+                        match remaining_tokens.get(dept_start) {
+                            None => Command::Error(String::from("No department provided")),
+                            Some(_) => {
+                                let department = remaining_tokens[dept_start..].join(" ");
+                                Command::Add(Person { name, department })
+                            }
                         }
                     }
                 }
             }
-        }
-        "remove" => {
-            let remaining_tokens = tokens[1..].to_vec();
-            let end_i = get_name_end(&remaining_tokens, "from");
-            match end_i {
-                0 => return Command::Error,
-                _ => {
-                    let name = remaining_tokens[0..end_i].join(" ");
-                    let dept_start = end_i + 1;
-                    match remaining_tokens.get(dept_start) {
-                        None => Command::Error,
-                        Some(_) => {
-                            let department = remaining_tokens[dept_start..].join(" ");
-                            Command::Remove(Person { name, department })
+        },
+        "remove" => match tokens.get(1) {
+            None => return Command::Error(String::from("No name provided")),
+            Some(_) => {
+                let remaining_tokens = tokens[1..].to_vec();
+                let end_i = get_name_end(&remaining_tokens, "from");
+                match end_i {
+                    0 => {
+                        return Command::Error(String::from(
+                            "Usage: REMOVE <name> FROM <department>",
+                        ))
+                    }
+                    _ => {
+                        let name = remaining_tokens[0..end_i].join(" ");
+                        let dept_start = end_i + 1;
+                        match remaining_tokens.get(dept_start) {
+                            None => Command::Error(String::from("No department provided")),
+                            Some(_) => {
+                                let department = remaining_tokens[dept_start..].join(" ");
+                                Command::Remove(Person { name, department })
+                            }
                         }
                     }
                 }
             }
-        }
-        "list" => Command::List,
+        },
+        "list" => match tokens.get(1) {
+            None => return Command::List(String::from("all")),
+            Some(_) => {
+                let remaining_tokens = tokens[1..].to_vec();
+                let department = remaining_tokens.join(" ");
+                Command::List(department)
+            }
+        },
         "exit" => Command::Exit,
-        _ => Command::Error,
+        _ => Command::Error(String::from("Invalid command")),
     }
 }
 
