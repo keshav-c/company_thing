@@ -53,6 +53,8 @@ impl Company {
         // contain the department we just removed them from. So we do the check again:
         // If employee exists and the department is in their list, we remove the department from the list
 
+        // Here the problem of using if let is that we cant show errors for invalid operations
+
         if let Some(employees) = self.department_employees.get_mut(&department) {
             if let Ok(i) = employees.binary_search(&name) {
                 employees.remove(i);
@@ -66,9 +68,11 @@ impl Company {
             if let Ok(i) = departments.binary_search(&department) {
                 departments.remove(i);
             }
-            // Remove employee if they are not in any departments
+            // Remove employee if they are not in any departments. No need to remove department.
             if departments.is_empty() {
-                self.employee_departments.remove(&name);
+                if let Ok(i) = self.employees.binary_search(&name) {
+                    self.employees.remove(i);
+                }
             }
         }
     }
@@ -122,9 +126,11 @@ fn main() {
         match command {
             Command::Add(person) => {
                 company.add(person);
+                println!("OK");
             }
             Command::Remove(person) => {
                 company.remove(person);
+                println!("OK");
             }
             Command::List(which) => {
                 company.list(which);
