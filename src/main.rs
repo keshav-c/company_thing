@@ -77,32 +77,16 @@ impl Company {
         }
     }
 
-    fn list(&self, which: String) {
-        // TODO: move presentation logic out of company struct and just return the list with some metadata
+    fn list(&self, which: &String) -> Option<&Vec<String>> {
         match which.as_str() {
             "all" => {
                 if self.employees.is_empty() {
-                    println!("No Employees");
+                    None
                 } else {
-                    println!("All Employees");
-                    println!("-------------");
-                    for employee in &self.employees {
-                        println!("{}", employee);
-                    }
-                    println!("-------------");
+                    Some(&self.employees)
                 }
             }
-            _ => match self.department_employees.get(&which) {
-                None => println!("No Department found"),
-                Some(employees) => {
-                    println!("{} department", which);
-                    println!("-------------");
-                    for employee in employees {
-                        println!("{}", employee);
-                    }
-                    println!("-------------");
-                }
-            },
+            _ => self.department_employees.get(which),
         }
     }
 }
@@ -133,7 +117,23 @@ fn main() {
                 println!("OK");
             }
             Command::List(which) => {
-                company.list(which);
+                let list = company.list(&which);
+                match list {
+                    None => {
+                        if which == String::from("all") {
+                            println!("No Employees found");
+                        } else {
+                            println!("{} department has 0 employees", which);
+                        }
+                    }
+                    Some(list) => {
+                        if which == String::from("all") {
+                            print_employee_list(String::from("All Employees"), list);
+                        } else {
+                            print_employee_list(format!("{} department", which), list);
+                        }
+                    }
+                }
             }
             Command::Exit => {
                 println!("Exiting");
@@ -218,4 +218,13 @@ fn get_name_end(tokens: &Vec<&str>, end_word: &str) -> usize {
         }
     }
     0
+}
+
+fn print_employee_list(header: String, employees: &Vec<String>) {
+    println!("{}", header);
+    println!("-------------");
+    for employee in employees {
+        println!("{}", employee);
+    }
+    println!("-------------");
 }
